@@ -27,6 +27,17 @@ export default function AirdropPlanner() {
   const [abResult, setAbResult] = useState(null);
   const [tab, setTab] = useState("simulate");
 
+  // --- validation -----------------------------------------------------
+  // Altitude, mass and diameter feed straight into a square-root and a
+  // division in physics(); zero/negative/blank values used to silently
+  // produce NaN or Infinity and a broken plot. Same idea for wind speed.
+  const isValid =
+    Number.isFinite(altitude) && altitude > 0 &&
+    Number.isFinite(mass) && mass > 0 &&
+    Number.isFinite(diameter) && diameter > 0 &&
+    Number.isFinite(windSpeed) && windSpeed >= 0 &&
+    Number.isFinite(windDir);
+
   function physics(alt, ws, wd, m, dia, type) {
     const g = 9.81;
     const rho = 1.225 * Math.exp(-alt / 8500);
@@ -41,6 +52,7 @@ export default function AirdropPlanner() {
   }
 
   function simulate() {
+    if (!isValid) return;
     const r = physics(altitude, windSpeed, windDir, mass, diameter, chute);
     setResult({
       vTerm: r.vTerm.toFixed(2),
@@ -51,6 +63,7 @@ export default function AirdropPlanner() {
   }
 
   function runAB() {
+    if (!isValid) return;
     setAbResult({
       round: physics(altitude, windSpeed, windDir, mass, diameter, "round"),
       ramair: physics(altitude, windSpeed, windDir, mass, diameter, "ramair"),
@@ -97,6 +110,10 @@ export default function AirdropPlanner() {
           border-bottom: 1px solid ${C.red};
           background: ${C.red}0d;
         }
+        .afp-input.invalid {
+          border-bottom: 1px solid ${C.red};
+          background: ${C.red}14;
+        }
         .afp-select { cursor: pointer; }
         .afp-tab {
           cursor: pointer;
@@ -130,11 +147,17 @@ export default function AirdropPlanner() {
           border: 2px double ${C.red};
           color: ${C.red};
           transform: rotate(-1deg);
-          transition: transform .15s ease, background .15s ease;
+          transition: transform .15s ease, background .15s ease, opacity .15s ease;
         }
         .afp-stamp:hover { transform: rotate(0deg); background: ${C.red}10; }
         .afp-stamp.alt { border-color: ${C.greenInk}; color: ${C.greenInk}; transform: rotate(1deg); }
         .afp-stamp.alt:hover { transform: rotate(0deg); background: ${C.greenInk}10; }
+        .afp-stamp:disabled {
+          opacity: .35;
+          cursor: not-allowed;
+          transform: none;
+        }
+        .afp-stamp:disabled:hover { background: transparent; }
         .afp-field-label {
           font-family: ${SANS};
           font-size: 11px;
@@ -222,10 +245,10 @@ export default function AirdropPlanner() {
               {/* Left */}
               <div className="afp-col-rule" style={{ padding: 22, borderRight: `1px solid ${C.rule}` }}>
                 <SectionLabel title="Aircraft & cargo" />
-                <Field label="Altitude (m)" value={altitude} onChange={setAltitude} />
-                <Field label="Speed (kt)" value={speed} onChange={setSpeed} />
-                <Field label="Mass (kg)" value={mass} onChange={setMass} />
-                <Field label="Canopy diameter (m)" value={diameter} onChange={setDiameter} />
+                <Field label="Altitude (m)" value={altitude} onChange={setAltitude} min={1} />
+                <Field label="Speed (kt)" value={speed} onChange={setSpeed} min={1} />
+                <Field label="Mass (kg)" value={mass} onChange={setMass} min={1} />
+                <Field label="Canopy diameter (m)" value={diameter} onChange={setDiameter} min={0.1} step={0.1} />
               </div>
 
               {/* Centre */}
@@ -329,16 +352,36 @@ export default function AirdropPlanner() {
                   <ReadoutRow label="CARP heading" value={result ? `${result.carpHeading}°` : "—"} emphasis last />
                 </div>
 
-                <button className="afp-stamp" onClick={simulate} style={{ marginTop: 18 }}>
+                <button
+                  className="afp-stamp"
+                  onClick={simulate}
+                  disabled={!isValid}
+                  title={isValid ? undefined : "Altitude, mass and canopy diameter must be greater than zero."}
+                  style={{ marginTop: 18 }}
+                >
                   Run simulation
                 </button>
+                {!isValid && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 11,
+                      fontFamily: SANS,
+                      color: C.red,
+                      textAlign: "center",
+                      maxWidth: 220,
+                    }}
+                  >
+                    Check inputs — altitude, mass, diameter and wind speed must be positive.
+                  </div>
+                )}
               </div>
 
               {/* Right */}
               <div style={{ padding: 22 }}>
                 <SectionLabel title="Wind & canopy" />
-                <Field label="Wind speed (m/s)" value={windSpeed} onChange={setWindSpeed} />
-                <Field label="Wind direction (°)" value={windDir} onChange={setWindDir} />
+                <Field label="Wind speed (m/s)" value={windSpeed} onChange={setWindSpeed} min={0} step={0.5} />
+                <Field label="Wind direction (°)" value={windDir} onChange={setWindDir} min={0} max={359} wrap />
                 <div style={{ marginTop: 4 }}>
                   <label className="afp-field-label">Canopy type</label>
                   <select className="afp-select" value={chute} onChange={(e) => setChute(e.target.value)}>
@@ -357,14 +400,25 @@ export default function AirdropPlanner() {
             <div className="afp-grid-3" style={{ display: "grid", gridTemplateColumns: "1fr 2fr" }}>
               <div className="afp-col-rule" style={{ padding: 22, borderRight: `1px solid ${C.rule}` }}>
                 <SectionLabel title="Conditions" />
-                <Field label="Altitude (m)" value={altitude} onChange={setAltitude} />
-                <Field label="Mass (kg)" value={mass} onChange={setMass} />
-                <Field label="Canopy diameter (m)" value={diameter} onChange={setDiameter} />
-                <Field label="Wind speed (m/s)" value={windSpeed} onChange={setWindSpeed} />
-                <Field label="Wind direction (°)" value={windDir} onChange={setWindDir} />
-                <button className="afp-stamp alt" onClick={runAB} style={{ marginTop: 10, width: "100%" }}>
+                <Field label="Altitude (m)" value={altitude} onChange={setAltitude} min={1} />
+                <Field label="Mass (kg)" value={mass} onChange={setMass} min={1} />
+                <Field label="Canopy diameter (m)" value={diameter} onChange={setDiameter} min={0.1} step={0.1} />
+                <Field label="Wind speed (m/s)" value={windSpeed} onChange={setWindSpeed} min={0} step={0.5} />
+                <Field label="Wind direction (°)" value={windDir} onChange={setWindDir} min={0} max={359} wrap />
+                <button
+                  className="afp-stamp alt"
+                  onClick={runAB}
+                  disabled={!isValid}
+                  title={isValid ? undefined : "Altitude, mass and canopy diameter must be greater than zero."}
+                  style={{ marginTop: 10, width: "100%" }}
+                >
                   Compare
                 </button>
+                {!isValid && (
+                  <div style={{ marginTop: 8, fontSize: 11, fontFamily: SANS, color: C.red }}>
+                    Check inputs — values must be positive.
+                  </div>
+                )}
               </div>
 
               <div style={{ padding: 24 }}>
@@ -413,15 +467,41 @@ function SectionLabel({ title }) {
   );
 }
 
-function Field({ label, value, onChange }) {
+// `min`/`max` set the browser-level hint; the real clamp happens onBlur so
+// the person can still freely type/backspace mid-edit. `wrap` (for compass
+// degrees) wraps the value into [0, 360) instead of clamping it.
+function Field({ label, value, onChange, min, max, step, wrap }) {
+  const outOfRange =
+    value === "" ||
+    !Number.isFinite(value) ||
+    (min !== undefined && value < min) ||
+    (max !== undefined && value > max);
+
   return (
     <div style={{ marginBottom: 14 }}>
       <label className="afp-field-label">{label}</label>
       <input
-        className="afp-input"
+        className={`afp-input${outOfRange ? " invalid" : ""}`}
         type="number"
+        min={min}
+        max={max}
+        step={step ?? 1}
         value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
+        onChange={(e) => {
+          const raw = e.target.value;
+          onChange(raw === "" ? "" : Number(raw));
+        }}
+        onBlur={(e) => {
+          let v = Number(e.target.value);
+          if (!Number.isFinite(v)) v = min ?? 0;
+          if (wrap) {
+            v = ((v % 360) + 360) % 360;
+          } else {
+            if (min !== undefined && v < min) v = min;
+            if (max !== undefined && v > max) v = max;
+          }
+          onChange(v);
+        }}
       />
     </div>
   );
